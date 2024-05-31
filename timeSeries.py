@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy as dc
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
+from sklearn.preprocessing import LabelEncoder
 
 from TSDS import *
 
@@ -19,22 +19,23 @@ plt.scatter(VERData['date'],VERData['position'])
 plt.savefig('Plots/MaxWinPlot.png')
 plt.close()
 
+##Make the position categorical
+label_encoder = LabelEncoder()
+VERData['position'] = label_encoder.fit_transform(VERData['position'])
+
 class LSTM(nn.Module):
-    def __init__(self,input_size,hidden_size,num_stacked_layers):
+    def __init__(self, num_classes, hidden_size, num_stacked_layers):
         super().__init__()
-        self.hidden_size = hidden_size
-        self.num_stacked_layers = num_stacked_layers
+        self.embedding = nn.Embedding(num_classes, hidden_size)
+        self.lstm = nn.LSTM(hidden_size, hidden_size, num_stacked_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, num_classes)
 
-        self.lstm = nn.LSTM(input_size,hidden_size,num_stacked_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size,1)
-
-    def forward(self,x):
-        batch_size = x.size(0)
-        h0 = torch.zeros(self.num_stacked_layers, batch_size, self.hidden_size).to(device)
-        c0 = torch.zeros(self.num_stacked_layers, batch_size, self.hidden_size).to(device)
-
-        out, _ = self.lstm(x,(h0,c0))
-        out = self.fc(out[:,-1,:])
+    def forward(self, x):
+        x = self.embedding(x)
+        h0 = torch.zeros(self.lstm.num_layers, x.size(0), self.lstm.hidden_size).to(device)
+        c0 = torch.zeros(self.lstm.num_layers, x.size(0), self.lstm.hidden_size).to(device)
+        out, _ = self.lstm(x, (h0, c0))
+        out = self.fc(out[:, -1, :])
         return out
 
 def prepData(data,steps):
@@ -58,10 +59,6 @@ npShiftData = shiftData.to_numpy()
 scaler = MinMaxScaler(feature_range=(-1,1))
 npShiftData = scaler.fit_transform(npShiftData)
 
-### Split the data into training and testing sets
-# y = npShiftData[:, 0] 
-# X = npShiftData[:,1:]
-# X = dc(np.flip(X, axis = 1))
 
 X = npShiftData[:, 1:]
 y = npShiftData[:, 0]
@@ -83,10 +80,10 @@ X_train = X_train.reshape((-1,5,1))
 y_train = y_train.reshape((-1,1))
 y_test = y_test.reshape((-1,1))
 
-X_train = torch.tensor(X_train).float()
-X_test = torch.tensor(X_test).float()
-y_train = torch.tensor(y_train).float()
-y_test = torch.tensor(y_test).float()
+X_train = torch.tensor(X_train, dtype=torch.long)
+X_test = torch.tensor(X_test, dtype=torch.long)
+y_train = torch.tensor(y_train, dtype=torch.long)
+y_test = torch.tensor(y_test, dtype=torch.long)
 
 train_data = TimeSeriesDataset(X_train,y_train)
 test_data = TimeSeriesDataset(X_test,y_test)
@@ -94,12 +91,13 @@ test_data = TimeSeriesDataset(X_test,y_test)
 train_loader = DataLoader(train_data,batch_size=3,shuffle=True)
 test_loader = DataLoader(test_data,batch_size=3,shuffle=False)
 
-model = LSTM(1,2,1)
+num_classes = len(label_encoder.classes_)
+model = LSTM(num_classes, hidden_size=16, num_stacked_layers=2)
 model.to(device)
 
 def train_one_epoch(epoch):
     learning_rate = 0.001
-    loss_function = nn.MSELoss()
+    loss_function = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     model.train(True)
     print(f'Epoch:{epoch+1}')
@@ -122,7 +120,7 @@ def train_one_epoch(epoch):
 
 
 def validate_one_epoch():
-    loss_function = nn.MSELoss()
+    loss_function = nn.CrossEntropyLoss()
     model.train(False)
     running_loss = 0.0
     
@@ -149,60 +147,28 @@ for epoch in range(num_epochs):
 print(shiftData)
 
 with torch.no_grad():
-    predicted = model(X_train.to(device)).to('cpu').numpy()
+    train_predictions = model(X_train.to(device)).argmax(dim=1).cpu().numpy()
+    test_predictions = model(X_test.to(device)).argmax(dim=1).cpu().numpy()
 
-plt.plot(y_train,label='Actual Position')
-plt.plot(predicted,label='Predicted position')
-plt.xlabel('Day')
-plt.ylabel('Close')
-plt.legend()
-plt.savefig('Plots/TrainingPreds.png')
-plt.close()
+# Inverse transform the predictions and actual values - CHANGED
+train_predictions = label_encoder.inverse_transform(train_predictions)
+test_predictions = label_encoder.inverse_transform(test_predictions)
+y_train = label_encoder.inverse_transform(y_train)
+y_test = label_encoder.inverse_transform(y_test)
 
-train_predictions = predicted.flatten()
-
-dummies = np.zeros((X_train.shape[0], 5+1))
-dummies[:, 0] = train_predictions
-dummies = scaler.inverse_transform(dummies)
-
-train_predictions = dc(dummies[:, 0])
-train_predictions
-
-dummies = np.zeros((X_train.shape[0], 5+1))
-dummies[:, 0] = y_train.flatten()
-dummies = scaler.inverse_transform(dummies)
-
-new_y_train = dc(dummies[:, 0])
-new_y_train
-
-plt.plot(new_y_train, label='Actual Postition')
+# Plotting - UNCHANGED
+plt.plot(y_train, label='Actual Position')
 plt.plot(train_predictions, label='Predicted Position')
-plt.xlabel('Day')
+plt.xlabel('Race')
 plt.ylabel('Position')
 plt.legend()
-plt.savefig('Plots/ScaledTrainPredictions')
+plt.savefig('Plots/TrainingPredictions.png')
 plt.close()
 
-
-test_predictions = model(X_test.to(device)).detach().cpu().numpy().flatten()
-
-dummies = np.zeros((X_test.shape[0], 5+1))
-dummies[:, 0] = test_predictions
-dummies = scaler.inverse_transform(dummies)
-
-test_predictions = dc(dummies[:, 0])
-test_predictions
-
-dummies = np.zeros((X_test.shape[0], 5+1))
-dummies[:, 0] = y_test.flatten()
-dummies = scaler.inverse_transform(dummies)
-
-new_y_test = dc(dummies[:, 0])
-new_y_test
-
-plt.plot(new_y_test, label='Actual Position')
+plt.plot(y_test, label='Actual Position')
 plt.plot(test_predictions, label='Predicted Position')
-plt.xlabel('Position')
-plt.ylabel('Close')
+plt.xlabel('Race')
+plt.ylabel('Position')
 plt.legend()
-plt.savefig('Plots/TestingPlot')
+plt.savefig('Plots/TestingPredictions.png')
+plt.close()
