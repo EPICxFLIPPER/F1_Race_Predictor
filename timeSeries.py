@@ -128,7 +128,7 @@ def validate_one_epoch(model,test_loader):
     print('***************************************************')
 
 ##Effects: Produces the training and testing plots
-def plot(model, X_train,X_test,y_train,y_test):
+def plot(model, X_train,X_test,y_train,y_test,number):
     # Predictions
     with torch.no_grad():
         train_predictions = model(X_train.to(device)).argmax(dim=1).cpu().numpy()
@@ -140,21 +140,30 @@ def plot(model, X_train,X_test,y_train,y_test):
     y_train = label_encoder.inverse_transform(y_train)
     y_test = label_encoder.inverse_transform(y_test)
 
+    train_predictions = pd.to_numeric(train_predictions)
+    test_predictions = pd.to_numeric(test_predictions)
+    y_train = pd.to_numeric(y_train)
+    y_test = pd.to_numeric(y_test)
+
     # Plotting
     plt.plot(y_train, label='Actual Position')
     plt.plot(train_predictions, label='Predicted Position')
+    plt.gca().invert_yaxis()
+    plt.yticks(np.arange(1, max(y_train.max(), train_predictions.max()) + 1))
     plt.xlabel('Race')
     plt.ylabel('Position')
     plt.legend()
-    plt.savefig('Plots/TrainingPredictions.png')
+    plt.savefig('Plots/' + str(number) + 'TrainingPredictions.png')
     plt.close()
 
     plt.plot(y_test, label='Actual Position')
     plt.plot(test_predictions, label='Predicted Position')
+    plt.gca().invert_yaxis()
+    plt.yticks(np.arange(1, max(y_train.max(), train_predictions.max()) + 1))
     plt.xlabel('Race')
     plt.ylabel('Position')
     plt.legend()
-    plt.savefig('Plots/TestingPredictions.png')
+    plt.savefig('Plots/' + str(number) + 'TestingPredictions.png')
     plt.close()
 
 ##Effects: Creates the LSTM NN model to predict drive race positons based off of their previous races
@@ -179,13 +188,13 @@ def createModel(number):
     model.to(device)
 
     ##Training Loop
-    num_epochs = 10
+    num_epochs = 15
     for epoch in range(num_epochs):
         train_one_epoch(epoch,model,train_loader)
         validate_one_epoch(model,test_loader)
 
-    plot(model,X_train,X_test,y_train,y_test)
+    plot(model,X_train,X_test,y_train,y_test,number)
 
     return model
 
-createModel(33)
+createModel(11)

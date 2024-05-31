@@ -9,7 +9,8 @@ def createURL(year,round):
 def getDriverData(number,yearsBack):
     rows = []
     for i in range(yearsBack):
-        year = 2015 + i
+        diff = yearsBack - i - 1
+        year = 2024 + i
         print(year)
         round = 1
         while(True):
@@ -41,7 +42,7 @@ def getDriverData(number,yearsBack):
             round += 1
             print("round:" + str(round))
     df = pd.DataFrame(rows)
-    df.to_pickle(str(number)+".pkl")
+    df.to_pickle("Data/" + str(number)+".pkl")
 
 
 
