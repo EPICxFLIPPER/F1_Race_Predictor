@@ -10,7 +10,7 @@ def getDriverData(number,yearsBack):
     rows = []
     for i in range(yearsBack):
         diff = yearsBack - i - 1
-        year = 2024 + i
+        year = 2024 - diff
         print(year)
         round = 1
         while(True):
@@ -25,9 +25,12 @@ def getDriverData(number,yearsBack):
             # Find the driver with number 33
             driver_33_info = None
             for result in raceResults:
-                if result["Driver"]["permanentNumber"] == str(number):
-                    driver_33_info = result
-                    break
+                try:
+                    if result["Driver"]["permanentNumber"] == str(number):
+                        driver_33_info = result
+                        break
+                except Exception as e:
+                    pass
 
             # Create the single-row table
             if driver_33_info:
@@ -46,4 +49,7 @@ def getDriverData(number,yearsBack):
 
 
 
+##Effects: gets the drivesrs last 5 races, writes them to pandas dataframe, and writest he dataframe to a PastNumber.pkl
+def getPastPostion(number):
+    print("stub")
 

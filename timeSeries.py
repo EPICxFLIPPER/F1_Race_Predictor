@@ -45,7 +45,7 @@ def fetchData(number):
     try:
         RAWData = pd.read_pickle('Data/' + str(number) + '.pkl')
     except FileNotFoundError as e:
-        createData.getDriverData(number,30)
+        createData.getDriverData(number,15)
         RAWData = pd.read_pickle('Data/' + str(number) + '.pkl')
 
     RAWData['date'] = pd.to_datetime(RAWData['date'])
@@ -55,6 +55,12 @@ def fetchData(number):
 
 ##Effects: Turns the position column into a numberic category for prediction
 def categorize(data):
+    # Ensure all entries in the 'position' column are integers
+    data['position'] = data['position'].astype(int)
+    all_positions = pd.DataFrame({'position': np.arange(1, 21)})
+    data_with_all_positions = pd.concat([data, all_positions], ignore_index=True)
+    label_encoder.fit(data_with_all_positions['position'])
+
     data['position'] = label_encoder.fit_transform(data['position'])
     return data
 
@@ -197,4 +203,8 @@ def createModel(number):
 
     return model
 
-createModel(11)
+def getDevice():
+    return device
+
+def getLabelEncoder():
+    return label_encoder
