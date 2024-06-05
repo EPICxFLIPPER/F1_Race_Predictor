@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import createData
+from sklearn.model_selection import train_test_split
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 label_encoder = LabelEncoder()
@@ -29,14 +30,16 @@ class LSTM(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(num_classes, hidden_size)
         self.lstm = nn.LSTM(hidden_size, hidden_size, num_stacked_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
+        self.fc1 = nn.Linear(hidden_size, hidden_size // 2)
+        self.fc2 = nn.Linear(hidden_size // 2, num_classes)
 
     def forward(self, x):
         x = self.embedding(x)
         h0 = torch.zeros(self.lstm.num_layers, x.size(0), self.lstm.hidden_size).to(device)
         c0 = torch.zeros(self.lstm.num_layers, x.size(0), self.lstm.hidden_size).to(device)
         out, _ = self.lstm(x, (h0, c0))
-        out = self.fc(out[:, -1, :])
+        out = torch.relu(self.fc1(out[:, -1, :]))
+        out = self.fc2(out)
         return out
 ##Effects: Feteches the data and takes only the date and position columns. 
 ##         If the data does not exist, makes the data and places it in the data folder.
@@ -81,12 +84,14 @@ def trainTest(data,split,num_classes):
     X = data[:, 1:]
     y = data[:, 0]
     X = dc(np.flip(X, axis=1))
-    split_index = int(len(X) * split)
+    # split_index = int(len(X) * split)
 
-    X_train = X[:split_index]
-    X_test = X[split_index:]
-    y_train = y[:split_index]
-    y_test = y[split_index:]
+    # X_train = X[:split_index]
+    # X_test = X[split_index:]
+    # y_train = y[:split_index]
+    # y_test = y[split_index:]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(1 - split), random_state=42)
 
     X_train = torch.tensor(X_train, dtype=torch.long).clamp(0, num_classes - 1)
     X_test = torch.tensor(X_test, dtype=torch.long).clamp(0, num_classes - 1)
@@ -96,10 +101,9 @@ def trainTest(data,split,num_classes):
     return X_train, X_test, y_train, y_test
 
 # Training and validation functions
-def train_one_epoch(epoch,model,train_loader):
-    learning_rate = 0.001
+def train_one_epoch(epoch,model,train_loader,scheduler,optimizer):
+    # learning_rate = 0.001
     loss_function = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     model.train()
     running_loss = 0.0
 
@@ -182,7 +186,7 @@ def createModel(number):
     shiftedData = shiftedData.to_numpy()
     num_classes = len(label_encoder.classes_)
 
-    X_train,X_test,y_train,y_test = trainTest(shiftedData,.8,num_classes)
+    X_train,X_test,y_train,y_test = trainTest(shiftedData,.70,num_classes)
 
     train_data = TimeSeriesDataset(X_train, y_train)
     test_data = TimeSeriesDataset(X_test, y_test)
@@ -193,10 +197,13 @@ def createModel(number):
     model = LSTM(num_classes, hidden_size=16, num_stacked_layers=3)
     model.to(device)
 
+
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1) 
     ##Training Loop
     num_epochs = 15
     for epoch in range(num_epochs):
-        train_one_epoch(epoch,model,train_loader)
+        train_one_epoch(epoch,model,train_loader,scheduler,optimizer)
         validate_one_epoch(model,test_loader)
 
     plot(model,X_train,X_test,y_train,y_test,number)

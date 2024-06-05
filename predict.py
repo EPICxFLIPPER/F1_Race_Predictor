@@ -10,6 +10,11 @@ driverNumberToPostion = ({2:0, 3:0, 4:0, 10:0, 11:0,
                           23:0, 24:0, 27:0, 31:0, 33:0,
                           44:0, 55:0, 63:0, 77:0, 81:0})
 
+driverNumberToName = ({2:"SAR", 3:"RIC", 4:"NOR", 10:"GAS", 11:"PER",
+                          14:"ALO", 16:"LEC", 18:"STR", 20:"MAG", 22:"TSU",
+                          23:"ALB", 24:"ZHO", 27:"HUL", 31:"OCN", 33:"VER",
+                          44:"HAM", 55:"SAI", 63:"RUS", 77:"BOT", 81:"PIA"})
+
 ##Effects: Tanks in an array of 5 previous scoring positons, and returns an interger with the predicted postions
 def predict_next_position(past_positions,model):
     label_encoder = getLabelEncoder()
@@ -36,25 +41,18 @@ def predict_next_position(past_positions,model):
     return predicted_position
 
 
-##Turns the past data dataframe from pandas into an array
-##         Most Recent first in array = [(t-1) (t-2) (t-3) ... ]
-def pastToArray(past_positions):
-    print("stub")
-
-def encodeResults():
+def encodeResults(year,round):
     for key in driverNumberToPostion.keys():
-        ##Pull the data if it is there
-        try:
-            past_positions = pd.read_pickle('Data/Past' + str(key) + '.pkl')
-        except FileNotFoundError as e:
-            past_positions = getPastPostion(key)
+        past_positions = getPastPostion(key,year,round)
 
-        pastToArray(past_positions)
         model = createModel(key)
         predicted_position = predict_next_position(past_positions,model)
         driverNumberToPostion[key] = predicted_position
 
+    for key, value in driverNumberToPostion.items():
+        print("Predicted Position for " + driverNumberToName[key] + ":" + str(value))
+
         
 
-
+encodeResults(2024,9)
 

@@ -49,7 +49,40 @@ def getDriverData(number,yearsBack):
 
 
 
-##Effects: gets the drivesrs last 5 races, writes them to pandas dataframe, and writest he dataframe to a PastNumber.pkl
-def getPastPostion(number):
-    print("stub")
+##Effects: gets the drivesrs last 5 races, and returns them as an array.
+##         Number is the drivers permanent number
+##         Year and Round and the year and round of the race to be predicted
+def getPastPostion(number,year,round):
+    results = []
+    currRound = round - 1
+    currYear = year
+    completed = 0
 
+    while (completed < 5):
+        if (currRound <= 0):
+            currRound = 30
+            currYear -= 1
+
+        url = createURL(currYear,currRound)
+        response = requests.get(url)
+        data = response.json()
+        if (data["MRData"]["RaceTable"]["Races"] !=[] ):
+            race_info = data["MRData"]["RaceTable"]["Races"][0]
+            raceResults = data["MRData"]["RaceTable"]["Races"][0]["Results"]
+            driver_info = None
+
+            for result in raceResults:
+                try:
+                    if result["Driver"]["permanentNumber"] == str(number):
+                        driver_info = result
+                        break
+                except Exception as e:
+                    pass
+
+            if (driver_info):
+                position = driver_info["position"]
+                results.append(int(position))
+                currRound -= 1
+                completed += 1
+
+    return results
