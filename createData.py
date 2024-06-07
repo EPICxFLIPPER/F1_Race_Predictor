@@ -2,8 +2,47 @@ import requests
 import pandas as pd
 import xmltodict, json
 
-def createURL(year,round):
+def createPositionURL(year,round):
     return "http://ergast.com/api/f1/" + str(year) + "/" + str(round) + "/results.json"
+
+def createQuilURL(year,round):
+    return 'http://ergast.com/api/f1/' + str(year) + '/' + str(round) + '/qualifying.json'
+
+def getQuliData(number,yearsBack):
+    rows = []
+    for i in range(yearsBack):
+        diff = yearsBack - i - 1
+        year = 2024 - diff
+        round = 1
+        while(True):
+            url = createPositionURL(year,round)
+            response = requests.get(url)
+            data = response.json()
+
+            if (data["MRData"]["RaceTable"]["Races"] ==[]):
+                print("Break")
+                break
+            race_info = data["MRData"]["RaceTable"]["Races"][0]
+            raceResults = data["MRData"]["RaceTable"]["Races"][0]["Results"]
+            driver_info = None
+            for result in raceResults:
+                try:
+                    if result["Driver"]["permanentNumber"] == str(number):
+                        driver_info = result
+                        break
+                except Exception as e:
+                    pass
+
+            if driver_info:
+                single_row = {
+                    "date": race_info["date"],
+                    "grid": driver_info["grid"]
+                }
+                rows.append(single_row)
+            round += 1
+            print("round:" + str(round))
+    df = pd.DataFrame(rows)
+    df.to_pickle("Data/qual" + str(number)+".pkl")
 
 ##Effects: Creats a pandas Dataframe for the driver with the given permanet number, and writes that dataframe to number.pkl
 def getDriverData(number,yearsBack):
@@ -14,7 +53,7 @@ def getDriverData(number,yearsBack):
         print(year)
         round = 1
         while(True):
-            url = createURL(year,round)
+            url = createPositionURL(year,round)
             response = requests.get(url)
             data = response.json()
             if (data["MRData"]["RaceTable"]["Races"] ==[]):
@@ -63,7 +102,7 @@ def getPastPostion(number,year,round):
             currRound = 30
             currYear -= 1
 
-        url = createURL(currYear,currRound)
+        url = createPositionURL(currYear,currRound)
         response = requests.get(url)
         data = response.json()
         if (data["MRData"]["RaceTable"]["Races"] !=[] ):
@@ -86,3 +125,41 @@ def getPastPostion(number,year,round):
                 completed += 1
 
     return results
+
+
+
+def getPastQualifying(number,year,round):
+    results = []
+    currRound = round - 1
+    currYear = year
+    completed = 0
+
+    while (completed < 5):
+        if (currRound <= 0):
+            currRound = 30
+            currYear -= 1
+
+        url = createPositionURL(currYear,currRound)
+        response = requests.get(url)
+        data = response.json()
+        if (data["MRData"]["RaceTable"]["Races"] !=[] ):
+            race_info = data["MRData"]["RaceTable"]["Races"][0]
+            raceResults = data["MRData"]["RaceTable"]["Races"][0]["Results"]
+            driver_info = None
+
+            for result in raceResults:
+                try:
+                    if result["Driver"]["permanentNumber"] == str(number):
+                        driver_info = result
+                        break
+                except Exception as e:
+                    pass
+
+            if (driver_info):
+                position = driver_info["grid"]
+                results.append(int(position))
+                currRound -= 1
+                completed += 1
+
+    return results
+

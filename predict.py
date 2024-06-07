@@ -2,6 +2,7 @@ from timeSeries import createModel
 from timeSeries import getDevice
 from timeSeries import getLabelEncoder
 from createData import getPastPostion
+from createData import getPastQualifying
 import pandas as pd
 import torch
 
@@ -16,23 +17,25 @@ driverNumberToName = ({2:"SAR", 3:"RIC", 4:"NOR", 10:"GAS", 11:"PER",
                           44:"HAM", 55:"SAI", 63:"RUS", 77:"BOT", 81:"PIA"})
 
 ##Effects: Tanks in an array of 5 previous scoring positons, and returns an interger with the predicted postions
-def predict_next_position(past_positions,model):
+def predict_next_position(past_positions,past_grid,model):
     label_encoder = getLabelEncoder()
     device = getDevice()
     # Ensure past_positions length is 5 (t-1 to t-5)
-    if len(past_positions) != 5:
-        raise ValueError("Input past_positions must have exactly 5 elements.")
+    if len(past_positions) != 5  or len(past_grid) != 5:
+        raise ValueError("Input past_positions must have exactly 10 elements.")
 
     # Encode the past positions
     encoded_positions = label_encoder.transform(past_positions)
+    encoded_grid = label_encoder.transform(past_grid)
 
     # Convert to PyTorch tensor and reshape
-    input_tensor = torch.tensor(encoded_positions, dtype=torch.long).unsqueeze(0).to(device)
+    input_tensor_pos = torch.tensor(encoded_positions, dtype=torch.long).unsqueeze(0).to(device)
+    input_tensor_grid = torch.tensor(encoded_grid, dtype=torch.long).unsqueeze(0).to(device)
 
     # Make prediction
     with torch.no_grad():
         model.eval()
-        output = model(input_tensor)
+        output = model(input_tensor_pos, input_tensor_grid)
         predicted_index = output.argmax(dim=1).cpu().numpy()[0]
 
     # Decode the predicted index
@@ -44,9 +47,10 @@ def predict_next_position(past_positions,model):
 def encodeResults(year,round):
     for key in driverNumberToPostion.keys():
         past_positions = getPastPostion(key,year,round)
+        past_qualifying = getPastQualifying(key,year,round)
 
         model = createModel(key)
-        predicted_position = predict_next_position(past_positions,model)
+        predicted_position = predict_next_position(past_positions, past_qualifying, model)
         driverNumberToPostion[key] = predicted_position
 
     for key, value in driverNumberToPostion.items():
